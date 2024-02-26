@@ -1,4 +1,5 @@
 use axum::{
+    extract::Path,
     routing::{get, post},
     Json, Router,
 };
@@ -9,7 +10,8 @@ pub async fn run() {
     let app = Router::new()
         .route("/", get(hello_world))
         .route("/extract_body", post(extract_body))
-        .route("/extract_json", post(extract_json));
+        .route("/extract_json", post(extract_json))
+        .route("/extract_path_variable/:id", get(extract_path_variable));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -42,4 +44,8 @@ async fn extract_json(Json(json): Json<JsonRequest>) -> Json<JsonResponse> {
         message: json.message,
         added: "Added response".into(),
     })
+}
+
+async fn extract_path_variable(Path(id): Path<i32>) -> String {
+    id.to_string()
 }
