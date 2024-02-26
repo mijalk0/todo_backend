@@ -1,6 +1,8 @@
 use axum::{
-    extract::{Path, Query},
-    http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue, Method},
+    extract::{Path, Query, Request},
+    http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
+    middleware::{self, Next},
+    response::Response,
     routing::{get, post},
     Extension, Json, Router,
 };
@@ -23,7 +25,12 @@ pub async fn run() {
         .route("/extract_custom_header", get(extract_custom_header))
         .route("/extract_shared_data", get(extract_shared_data))
         .layer(cors)
-        .layer(Extension(String::from("Shared Data")));
+        .layer(Extension(String::from("Shared Data")))
+        .route(
+            "/read_custom_middleware_data",
+            get(read_custom_middleware_data),
+        )
+        .layer(middleware::from_fn(write_custom_middleware_data));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -94,4 +101,20 @@ async fn extract_custom_header(headers: HeaderMap) -> String {
 
 async fn extract_shared_data(Extension(shared_data): Extension<String>) -> String {
     shared_data
+}
+
+async fn read_custom_middleware_data(
+    Extension(custom_middleware_data): Extension<CustomMiddlewareData>,
+) -> String {
+    custom_middleware_data.0
+}
+
+#[derive(Clone)]
+struct CustomMiddlewareData(String);
+
+async fn write_custom_middleware_data(mut request: Request, next: Next) -> Response {
+    let extensions = request.extensions_mut();
+    extensions.insert(CustomMiddlewareData("Custom".into()));
+    let response = next.run(request).await;
+    response
 }
