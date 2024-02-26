@@ -1,12 +1,17 @@
 use axum::{
     extract::{Path, Query},
-    http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue},
+    http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue, Method},
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use tower_http::cors::{Any, CorsLayer};
 
 pub async fn run() {
+    let cors = CorsLayer::new()
+        .allow_methods([Method::GET, Method::POST])
+        .allow_origin(Any);
+
     // build our application with a single route
     let app = Router::new()
         .route("/", get(hello_world))
@@ -15,7 +20,8 @@ pub async fn run() {
         .route("/extract_path_variable/:id", get(extract_path_variable))
         .route("/extract_query_params", get(extract_query_params))
         .route("/extract_standard_header", get(extract_standard_header))
-        .route("/extract_custom_header", get(extract_custom_header));
+        .route("/extract_custom_header", get(extract_custom_header))
+        .layer(cors);
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
