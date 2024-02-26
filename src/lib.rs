@@ -2,7 +2,7 @@ use axum::{
     extract::{Path, Query},
     http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue, Method},
     routing::{get, post},
-    Json, Router,
+    Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
@@ -21,7 +21,9 @@ pub async fn run() {
         .route("/extract_query_params", get(extract_query_params))
         .route("/extract_standard_header", get(extract_standard_header))
         .route("/extract_custom_header", get(extract_custom_header))
-        .layer(cors);
+        .route("/extract_shared_data", get(extract_shared_data))
+        .layer(cors)
+        .layer(Extension(String::from("Shared Data")));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -88,4 +90,8 @@ async fn extract_custom_header(headers: HeaderMap) -> String {
         .unwrap_or(Ok(""))
         .unwrap()
         .into()
+}
+
+async fn extract_shared_data(Extension(shared_data): Extension<String>) -> String {
+    shared_data
 }
