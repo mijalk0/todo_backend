@@ -1,8 +1,9 @@
 use axum::{
-    extract::{Path, Query, Request},
+    async_trait,
+    extract::{FromRequest, Path, Query, Request},
     http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
     middleware::{self, Next},
-    response::Response,
+    response::{IntoResponse, Response, Result},
     routing::{get, post},
     Extension, Json, Router,
 };
@@ -30,7 +31,10 @@ pub async fn run() {
             "/read_custom_middleware_data",
             get(read_custom_middleware_data),
         )
-        .layer(middleware::from_fn(write_custom_middleware_data));
+        .layer(middleware::from_fn(write_custom_middleware_data))
+        .route("/error", get(error))
+        .route("/code", get(code))
+        .route("/validate_json", post(validate_json));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -117,4 +121,43 @@ async fn write_custom_middleware_data(mut request: Request, next: Next) -> Respo
     extensions.insert(CustomMiddlewareData("Custom".into()));
     let response = next.run(request).await;
     response
+}
+
+async fn error() -> Result<(), StatusCode> {
+    Err(StatusCode::UNAUTHORIZED)
+}
+
+async fn code() -> Response {
+    (StatusCode::NO_CONTENT, ()).into_response()
+}
+
+#[derive(Deserialize)]
+struct ValidatedJson {
+    larger: i32,
+    smaller: i32,
+}
+
+#[async_trait]
+impl<S> FromRequest<S> for ValidatedJson
+where
+    Json<ValidatedJson>: FromRequest<S>,
+    S: Send + Sync,
+{
+    type Rejection = Response;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let Json(maybe_validated_json) = Json::<ValidatedJson>::from_request(req, state)
+            .await
+            .map_err(IntoResponse::into_response)?;
+
+        if maybe_validated_json.larger > maybe_validated_json.smaller {
+            Ok(maybe_validated_json)
+        } else {
+            return Err((StatusCode::BAD_REQUEST, "").into_response());
+        }
+    }
+}
+
+async fn validate_json(validated_json: ValidatedJson) -> String {
+    format!("{} > {}", validated_json.larger, validated_json.smaller)
 }
