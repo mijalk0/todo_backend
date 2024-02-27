@@ -8,9 +8,32 @@ use axum::{
     Extension, Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use sqlx::prelude::FromRow;
+use std::error::Error;
 use tower_http::cors::{Any, CorsLayer};
 
-pub async fn run() {
+#[derive(FromRow)]
+struct User {
+    id: i32,
+    username: String,
+    password: String,
+    token: Option<String>,
+}
+
+const DATABASE_URL: &'static str = "postgresql://postgres:postgres@localhost:5432/postgres";
+
+pub async fn run() -> Result<(), Box<dyn Error>> {
+    let conn = sqlx::postgres::PgPool::connect(DATABASE_URL).await?;
+    let users = sqlx::query_as::<_, User>("SELECT * FROM users")
+        .fetch_all(&conn)
+        .await?;
+    for user in users {
+        println!(
+            "id: {}, name: {}, password: {}, token: {:?}",
+            user.id, user.username, user.password, user.token
+        );
+    }
+
     let cors = CorsLayer::new()
         .allow_methods([Method::GET, Method::POST])
         .allow_origin(Any);
@@ -41,6 +64,7 @@ pub async fn run() {
         .await
         .unwrap();
     axum::serve(listener, app).await.unwrap();
+    Ok(())
 }
 
 async fn hello_world() -> String {
