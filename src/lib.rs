@@ -7,6 +7,8 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
+use dotenvy::dotenv;
+use dotenvy_macro::dotenv;
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use std::error::Error;
@@ -20,12 +22,15 @@ struct User {
     token: Option<String>,
 }
 
-const DATABASE_URL: &'static str = "postgresql://postgres:postgres@localhost:5432/postgres";
+const DATABASE_URL: &'static str = dotenv!("DATABASE_URL");
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
-    let conn = sqlx::postgres::PgPool::connect(DATABASE_URL).await?;
+    dotenv().ok();
+    let pool = sqlx::postgres::PgPool::connect(DATABASE_URL).await?;
+    sqlx::migrate!("./migrations").run(&pool).await?;
+
     let users = sqlx::query_as::<_, User>("SELECT * FROM users")
-        .fetch_all(&conn)
+        .fetch_all(&pool)
         .await?;
     for user in users {
         println!(
