@@ -1,10 +1,8 @@
 use axum::{
-    async_trait,
-    extract::{FromRequest, Path, Query, Request},
-    http::{header::USER_AGENT, HeaderMap, HeaderName, HeaderValue, Method, StatusCode},
-    middleware::{self, Next},
+    extract::Path,
+    http::StatusCode,
     response::{IntoResponse, Response, Result},
-    routing::{get, post},
+    routing::{delete, get, patch, put},
     Extension, Json, Router,
 };
 use dotenvy::dotenv;
@@ -13,8 +11,9 @@ use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use std::error::Error;
 use tower_http::cors::{Any, CorsLayer};
+use validator::Validate;
 
-#[derive(FromRow)]
+#[derive(FromRow, Serialize, Deserialize)]
 struct User {
     id: i32,
     username: String,
@@ -29,40 +28,15 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     let pool = sqlx::postgres::PgPool::connect(DATABASE_URL).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let users = sqlx::query_as::<_, User>("SELECT * FROM users")
-        .fetch_all(&pool)
-        .await?;
-    for user in users {
-        println!(
-            "id: {}, name: {}, password: {}, token: {:?}",
-            user.id, user.username, user.password, user.token
-        );
-    }
+    let cors = CorsLayer::new().allow_origin(Any);
 
-    let cors = CorsLayer::new()
-        .allow_methods([Method::GET, Method::POST])
-        .allow_origin(Any);
-
-    // build our application with a single route
     let app = Router::new()
-        .route("/", get(hello_world))
-        .route("/extract_body", post(extract_body))
-        .route("/extract_json", post(extract_json))
-        .route("/extract_path_variable/:id", get(extract_path_variable))
-        .route("/extract_query_params", get(extract_query_params))
-        .route("/extract_standard_header", get(extract_standard_header))
-        .route("/extract_custom_header", get(extract_custom_header))
-        .route("/extract_shared_data", get(extract_shared_data))
+        .route("/users", put(create_user))
+        .route("/users/:id", get(read_user))
+        .route("/users/:id", patch(update_user))
+        .route("/users/:id", delete(delete_user))
         .layer(cors)
-        .layer(Extension(String::from("Shared Data")))
-        .route(
-            "/read_custom_middleware_data",
-            get(read_custom_middleware_data),
-        )
-        .layer(middleware::from_fn(write_custom_middleware_data))
-        .route("/error", get(error))
-        .route("/code", get(code))
-        .route("/validate_json", post(validate_json));
+        .layer(Extension(pool));
 
     // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
@@ -72,121 +46,76 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-async fn hello_world() -> String {
-    "Hello, World!".into()
+#[derive(Deserialize, Validate)]
+struct UserRequested {
+    #[validate(length(max = 64))]
+    username: String,
+    #[validate(length(max = 64))]
+    password: String,
+    token: Option<String>,
 }
 
-async fn extract_body(body: String) -> String {
-    body
-}
-
-#[derive(Serialize, Deserialize)]
-struct JsonRequest {
-    message: String,
-}
-
-#[derive(Serialize, Deserialize)]
-struct JsonResponse {
-    message: String,
-    added: String,
-}
-
-async fn extract_json(Json(json): Json<JsonRequest>) -> Json<JsonResponse> {
-    Json(JsonResponse {
-        message: json.message,
-        added: "Added response".into(),
-    })
-}
-
-async fn extract_path_variable(Path(id): Path<i32>) -> String {
-    id.to_string()
-}
-
-#[derive(Serialize, Deserialize)]
-struct QueryParams {
-    message: String,
-    id: i32,
-}
-
-async fn extract_query_params(Query(query): Query<QueryParams>) -> Json<QueryParams> {
-    Json(query)
-}
-
-async fn extract_standard_header(headers: HeaderMap) -> String {
-    headers
-        .get(USER_AGENT)
-        .map(HeaderValue::to_str)
-        .unwrap_or(Ok(""))
-        .unwrap()
-        .into()
-}
-
-const CUSTOM_HEADER: HeaderName = HeaderName::from_static("x-custom-header");
-
-async fn extract_custom_header(headers: HeaderMap) -> String {
-    headers
-        .get(CUSTOM_HEADER)
-        .map(HeaderValue::to_str)
-        .unwrap_or(Ok(""))
-        .unwrap()
-        .into()
-}
-
-async fn extract_shared_data(Extension(shared_data): Extension<String>) -> String {
-    shared_data
-}
-
-async fn read_custom_middleware_data(
-    Extension(custom_middleware_data): Extension<CustomMiddlewareData>,
-) -> String {
-    custom_middleware_data.0
-}
-
-#[derive(Clone)]
-struct CustomMiddlewareData(String);
-
-async fn write_custom_middleware_data(mut request: Request, next: Next) -> Response {
-    let extensions = request.extensions_mut();
-    extensions.insert(CustomMiddlewareData("Custom".into()));
-    let response = next.run(request).await;
-    response
-}
-
-async fn error() -> Result<(), StatusCode> {
-    Err(StatusCode::UNAUTHORIZED)
-}
-
-async fn code() -> Response {
-    (StatusCode::NO_CONTENT, ()).into_response()
-}
-
-#[derive(Deserialize)]
-struct ValidatedJson {
-    larger: i32,
-    smaller: i32,
-}
-
-#[async_trait]
-impl<S> FromRequest<S> for ValidatedJson
-where
-    Json<ValidatedJson>: FromRequest<S>,
-    S: Send + Sync,
-{
-    type Rejection = Response;
-
-    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let Json(maybe_validated_json) = Json::<ValidatedJson>::from_request(req, state)
-            .await
-            .map_err(IntoResponse::into_response)?;
-
-        if maybe_validated_json.larger > maybe_validated_json.smaller {
-            Ok(maybe_validated_json)
-        } else {
-            return Err((StatusCode::BAD_REQUEST, "").into_response());
-        }
+async fn create_user(
+    Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
+    Json(user): Json<UserRequested>,
+) -> Response {
+    if let Ok(user) = sqlx::query_as::<_, User>(
+        "INSERT INTO users (username, password, token) VALUES ($1, $2, $3) RETURNING *",
+    )
+    .bind(&user.username)
+    .bind(&user.password)
+    .bind(&user.token)
+    .fetch_one(&pool)
+    .await
+    {
+        (StatusCode::CREATED, Json(user)).into_response()
+    } else {
+        (StatusCode::INTERNAL_SERVER_ERROR, ()).into_response()
     }
 }
 
-async fn validate_json(validated_json: ValidatedJson) -> String {
-    format!("{} > {}", validated_json.larger, validated_json.smaller)
+async fn read_user(
+    Path(id): Path<i32>,
+    Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
+) -> Result<Json<User>, StatusCode> {
+    sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
+        .bind(&id)
+        .fetch_one(&pool)
+        .await
+        .map(|user| Json(user))
+        .map_err(|_| StatusCode::NOT_FOUND)
+}
+
+async fn update_user(
+    Path(id): Path<i32>,
+    Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
+    Json(user): Json<UserRequested>,
+) -> Result<Json<User>, StatusCode> {
+    sqlx::query_as::<_, User>(
+        "UPDATE users SET username = $2, password = $3, token = $4 WHERE id = $1 RETURNING *",
+    )
+    .bind(&id)
+    .bind(&user.username)
+    .bind(&user.password)
+    .bind(&user.token)
+    .fetch_one(&pool)
+    .await
+    .map(|user| Json(user))
+    .map_err(|_| StatusCode::NOT_FOUND)
+}
+
+async fn delete_user(
+    Path(id): Path<i32>,
+    Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
+) -> StatusCode {
+    if sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(&id)
+        .execute(&pool)
+        .await
+        .is_ok()
+    {
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::NOT_FOUND
+    }
 }

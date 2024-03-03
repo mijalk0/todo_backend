@@ -13,3 +13,4 @@ tower-http = { version = "0.5", features = [ "cors" ] }
 sqlx = { version = "0.7", features = [ "postgres", "runtime-tokio-rustls", "macros" ] }
 dotenvy = "0.15"
 dotenvy_macro = "0.15"
+validator = { version = "0.16", features = [ "derive" ] }
