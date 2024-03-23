@@ -28,8 +28,3 @@ CREATE TRIGGER update_updated_at_trigger
 BEFORE UPDATE ON tasks
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
-
-INSERT INTO users (username, password) VALUES ('alice', 'bob');
-
-INSERT INTO tasks (user_id, title) 
-SELECT id, 'write a fullstack app' FROM users WHERE username='alice';
