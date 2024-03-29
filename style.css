@@ -1,0 +1,106 @@
+@font-face { font-family: helonik;
+  src: url(helonik.otf);
+}
+
+html * {
+    font-family: helonik;
+}
+
+body {
+    background-color: #000000;
+    opacity: 1;
+    background-image: radial-gradient(#222222 2px, #000000 2px);
+    background-size: 40px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+.blur-box {
+    background-color: rgba(255, 255, 255, 0.01);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    border-radius: 20px;
+    border-style: solid;
+    border-color: grey;
+    border-width: thin;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: space-between;
+}
+
+.input-field {
+    width: 400px;
+    font-size: 30px;
+    padding: 10px;
+    font-family: helonik;
+    display: flex;
+    flex-direction: column;
+    justify-content: left;
+    color: grey;
+}
+
+.remember-me {
+    font-size: 30px;
+    font-family: helonik;
+    display: flex;
+    flex-direction: column;
+    justify-content: left;
+    color: grey;
+}
+
+.or {
+    width: 400px;
+    font-size: 20px;
+    padding: 10px;
+    font-family: helonik;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: grey;
+    gap: 10px;
+}
+
+.rectangle {
+    height: 2px;
+    width: 100%;
+    background: grey;
+}
+
+.task-header, .task-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.task-footer {
+    font-size: 15px;
+}
+
+.task {
+    width: calc(100vw - 80px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+input, button, textarea {
+    border-color: transparent;
+    border-radius: 6px;
+    font-size: 20px;
+    color: black;
+    background: grey;
+}
+
+textarea {
+    resize: vertical;
+}
+
+label {
+    padding-bottom: 2px;
+}
