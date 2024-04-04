@@ -1,2 +1,0 @@
-colima stop
-colima start
