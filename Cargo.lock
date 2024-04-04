@@ -530,27 +530,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fullstack_todo"
-version = "0.1.0"
-dependencies = [
- "argon2",
- "axum",
- "axum-extra",
- "chrono",
- "dotenvy",
- "dotenvy_macro",
- "jsonwebtoken",
- "rand",
- "serde",
- "serde_json",
- "serde_with",
- "sqlx",
- "tokio",
- "tower-http",
- "validator",
-]
-
-[[package]]
 name = "futures-channel"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2061,6 +2040,27 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "todo_backend"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "axum",
+ "axum-extra",
+ "chrono",
+ "dotenvy",
+ "dotenvy_macro",
+ "jsonwebtoken",
+ "rand",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "tokio",
+ "tower-http",
+ "validator",
+]
 
 [[package]]
 name = "tokio"

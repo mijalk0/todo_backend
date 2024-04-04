@@ -1,7 +1,7 @@
-use fullstack_todo;
+use todo_backend;
 use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    fullstack_todo::run().await
+    todo_backend::run().await
 }
