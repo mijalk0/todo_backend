@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::prelude::FromRow;
 use std::{collections::HashSet, error::Error};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use validator::Validate;
 
 #[derive(Clone, FromRow, Serialize, Deserialize)]
@@ -65,11 +65,10 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
     let pool = sqlx::postgres::PgPool::connect(DATABASE_URL).await?;
     sqlx::migrate!("./migrations").run(&pool).await?;
 
-    let cors = CorsLayer::new().allow_origin(Any);
+    let cors = CorsLayer::very_permissive();
 
     let app = Router::new()
         // Auth
-        .route("/auth/users/:id", delete(delete_user))
         .route("/auth/register", post(register_user))
         .route("/auth/login", post(login_user))
         .route(
@@ -113,9 +112,9 @@ pub async fn run() -> Result<(), Box<dyn Error>> {
 
 #[derive(Deserialize, Validate)]
 struct UserRegisterRequest {
-    #[validate(length(max = 64))]
+    #[validate(length(min = 1, max = 64))]
     username: String,
-    #[validate(length(max = 64))]
+    #[validate(length(min = 1, max = 64))]
     password: String,
 }
 
@@ -129,6 +128,10 @@ async fn register_user(
     Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
     Json(user): Json<UserRegisterRequest>,
 ) -> Result<Json<UserRegisterResponse>, StatusCode> {
+    if user.validate().is_err() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let exists =
         sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT * FROM users WHERE username = $1)")
             .bind(&user.username)
@@ -165,10 +168,13 @@ async fn register_user(
 struct UserLoginRequest {
     username: String,
     password: String,
+    #[serde(rename = "rememberMe")]
+    remember_me: bool,
 }
 
 async fn login_user(
     Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
+    jar: CookieJar,
     Json(login_user): Json<UserLoginRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE username = $1")
@@ -197,21 +203,19 @@ async fn login_user(
     )
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let cookie = Cookie::build(("token", token.clone()))
+    let mut cookie = Cookie::build(("token", token.clone()))
         .path("/")
         .same_site(SameSite::Lax)
-        .http_only(true);
+        .secure(true)
+        .build();
 
-    let mut response = Response::new(json!({ "token": token }).to_string());
-    response.headers_mut().insert(
-        header::SET_COOKIE,
-        cookie
-            .to_string()
-            .parse()
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,
-    );
+    if login_user.remember_me {
+        cookie.make_permanent();
+    } else {
+        cookie.set_expires(None);
+    }
 
-    Ok(response)
+    Ok((jar.add(cookie), Json(json!({ "token": token }))))
 }
 
 async fn logout_user() -> Result<impl IntoResponse, StatusCode> {
@@ -230,22 +234,6 @@ async fn logout_user() -> Result<impl IntoResponse, StatusCode> {
     );
 
     Ok(response)
-}
-
-async fn delete_user(
-    Path(id): Path<i32>,
-    Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
-) -> StatusCode {
-    if sqlx::query("DELETE FROM users WHERE id = $1")
-        .bind(&id)
-        .execute(&pool)
-        .await
-        .is_ok()
-    {
-        StatusCode::NO_CONTENT
-    } else {
-        StatusCode::NOT_FOUND
-    }
 }
 
 pub async fn authentication(
@@ -295,20 +283,22 @@ async fn list_tasks(
     Extension(pool): Extension<sqlx::Pool<sqlx::Postgres>>,
     Extension(user): Extension<User>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let tasks: Vec<Task> = sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE user_id = $1")
-        .bind(&user.id)
-        .fetch_all(&pool)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let tasks: Vec<Task> = sqlx::query_as::<_, Task>(
+        "SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC",
+    )
+    .bind(&user.id)
+    .fetch_all(&pool)
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Json(tasks))
 }
 
 #[derive(Deserialize, Validate)]
 struct CreateTaskRequest {
+    #[validate(length(min = 1))]
     title: String,
     description: Option<String>,
-    completed: bool,
 }
 
 async fn create_task(
@@ -316,13 +306,16 @@ async fn create_task(
     Extension(user): Extension<User>,
     Json(task): Json<CreateTaskRequest>,
 ) -> Result<Json<Task>, StatusCode> {
+    if task.validate().is_err() {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
     let task: Task = sqlx::query_as::<_, Task>(
-        "INSERT INTO tasks (user_id, title, description, completed) VALUES ($1, $2, $3, $4) RETURNING *",
+        "INSERT INTO tasks (user_id, title, description) VALUES ($1, $2, $3) RETURNING *",
     )
     .bind(&user.id)
     .bind(&task.title)
     .bind(&task.description)
-    .bind(&task.completed)
     .fetch_one(&pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
