@@ -26,8 +26,8 @@ pub async fn update(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     let mut task = sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE id = $1 AND user_id = $2")
-        .bind(&id)
-        .bind(&user.id)
+        .bind(id)
+        .bind(user.id)
         .fetch_one(&mut *txn)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -50,9 +50,9 @@ pub async fn update(
     )
     .bind(&task.title)
     .bind(&task.description)
-    .bind(&task.completed)
-    .bind(&id)
-    .bind(&user.id)
+    .bind(task.completed)
+    .bind(id)
+    .bind(user.id)
     .fetch_one(&mut *txn)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

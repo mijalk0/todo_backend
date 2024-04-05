@@ -8,8 +8,8 @@ pub async fn read(
 ) -> Result<Json<Task>, StatusCode> {
     if let Some(task) =
         sqlx::query_as::<_, Task>("SELECT * FROM tasks WHERE id = $1 AND user_id = $2")
-            .bind(&id)
-            .bind(&user.id)
+            .bind(id)
+            .bind(user.id)
             .fetch_optional(&pool)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?

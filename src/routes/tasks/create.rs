@@ -22,7 +22,7 @@ pub async fn create(
     let task: Task = sqlx::query_as::<_, Task>(
         "INSERT INTO tasks (user_id, title, description) VALUES ($1, $2, $3) RETURNING *",
     )
-    .bind(&user.id)
+    .bind(user.id)
     .bind(&task.title)
     .bind(&task.description)
     .fetch_one(&pool)

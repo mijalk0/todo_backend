@@ -41,7 +41,7 @@ pub async fn middleware(
 
     let user = sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
         .bind(
-            &claims
+            claims
                 .sub
                 .parse::<i32>()
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?,

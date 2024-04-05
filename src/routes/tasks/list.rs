@@ -12,7 +12,7 @@ pub async fn list(
     let tasks: Vec<Task> = sqlx::query_as::<_, Task>(
         "SELECT * FROM tasks WHERE user_id = $1 ORDER BY created_at DESC",
     )
-    .bind(&user.id)
+    .bind(user.id)
     .fetch_all(&pool)
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

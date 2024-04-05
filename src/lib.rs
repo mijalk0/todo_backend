@@ -42,8 +42,8 @@ struct Claims {
     sub: String,
 }
 
-const DATABASE_URL: &'static str = dotenv!("DATABASE_URL");
-const JWT_SECRET: &'static [u8] = dotenv!("JWT_SECRET").as_bytes();
+const DATABASE_URL: &str = dotenv!("DATABASE_URL");
+const JWT_SECRET: &[u8] = dotenv!("JWT_SECRET").as_bytes();
 
 pub async fn run() -> Result<(), Box<dyn Error>> {
     dotenv().ok();

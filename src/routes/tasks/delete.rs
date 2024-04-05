@@ -7,8 +7,8 @@ pub async fn delete(
     Extension(user): Extension<User>,
 ) -> StatusCode {
     match sqlx::query_as::<_, Task>("DELETE FROM tasks WHERE id = $1 AND user_id = $2 RETURNING *")
-        .bind(&id)
-        .bind(&user.id)
+        .bind(id)
+        .bind(user.id)
         .fetch_optional(&pool)
         .await
     {
